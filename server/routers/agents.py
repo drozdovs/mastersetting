@@ -5,19 +5,40 @@ from __future__ import annotations
 
 import datetime as dt
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..deps import get_agent, get_current_user
-from ..models import Agent, Event, Setting, User, utcnow
+from ..deps import get_agent, get_current_user, require_admin, require_manager
+from ..models import Agent, Camera, Event, Setting, User, utcnow
 from ..schemas import (
     AgentOut, AgentRegisterIn, EventOut, EventSyncIn, HeartbeatIn, SettingIn,
 )
 from ..security import create_agent_token
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
+
+
+@router.get("/config")
+def agent_config(db: Session = Depends(get_db), agent: Agent = Depends(get_agent)):
+    """Конфиг для агента: список активных камер и операторов.
+
+    Агент кэширует ответ локально и продолжает работать офлайн; при обрыве
+    связи использует последнюю успешную версию.
+    """
+    cameras = [c.name for c in
+               db.query(Camera).filter(Camera.is_active.is_(True))
+               .order_by(Camera.name).all()]
+    operators = [o for (o,) in
+                 db.query(Event.operator)
+                 .filter(Event.operator != "")
+                 .distinct().order_by(Event.operator).all()]
+    return {
+        "cameras": cameras,
+        "operators": operators,
+        "server_time": utcnow().isoformat(),
+    }
 
 
 @router.post("/register")
@@ -97,6 +118,50 @@ admin_router = APIRouter(prefix="/api", tags=["admin"])
 @admin_router.get("/agents", response_model=list[AgentOut])
 def list_agents(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     return db.query(Agent).order_by(Agent.last_seen.desc()).all()
+
+
+@admin_router.patch("/agents/{agent_pk}")
+def update_agent(agent_pk: int, payload: dict, db: Session = Depends(get_db),
+                 _: User = Depends(require_manager)):
+    """Удалённое управление агентом: название, группа."""
+    agent = db.get(Agent, agent_pk)
+    if not agent:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Агент не найден")
+    if "hostname" in payload and payload["hostname"]:
+        agent.hostname = payload["hostname"]
+    if "group_id" in payload:
+        agent.group_id = payload["group_id"] or None
+    db.commit()
+    db.refresh(agent)
+    return {"ok": True, "id": agent.id}
+
+
+@admin_router.delete("/agents/{agent_pk}")
+def delete_agent(agent_pk: int, db: Session = Depends(get_db),
+                 _: User = Depends(require_admin)):
+    agent = db.get(Agent, agent_pk)
+    if not agent:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Агент не найден")
+    db.delete(agent)
+    db.commit()
+    return {"ok": True}
+
+
+@admin_router.get("/agents/{agent_pk}/settings")
+def agent_settings(agent_pk: int, db: Session = Depends(get_db),
+                   _: User = Depends(get_current_user)):
+    """Наборы настроек, зарегистрированные конкретным агентом."""
+    agent = db.get(Agent, agent_pk)
+    if not agent:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Агент не найден")
+    rows = (db.query(Setting)
+            .filter(Setting.agent_id == agent.agent_id)
+            .order_by(Setting.created_at.desc()).all())
+    return [{
+        "id": s.id, "operator": s.operator, "camera": s.camera,
+        "settings_name": s.settings_name, "size_bytes": s.size_bytes,
+        "created_at": s.created_at.isoformat(),
+    } for s in rows]
 
 
 @admin_router.get("/events", response_model=list[EventOut])

@@ -1,0 +1,57 @@
+name: Build Windows Agent
+
+# Собирает MasterSetting.exe на windows-latest и прикрепляет к релизу.
+# Запуск: вручную (workflow_dispatch) или на тег вида v2.0.0.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Версия сборки (напр. 2.0.0)"
+        required: false
+        default: "2.0.0"
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Write version info
+        run: |
+          $ver = "${{ github.event.inputs.version }}"
+          if (-not $ver) { $ver = "${{ github.ref_name }}".TrimStart('v') }
+          if (-not $ver) { $ver = "2.0.0" }
+          (Get-Content deploy/version_info.txt) -replace '2, 0, 0, 0', ($ver -replace '\.', ', ') `
+            -replace "u'2.0.0.0'", "u'$ver.0'" | Set-Content deploy/version_info.txt
+        shell: pwsh
+
+      - name: Build with PyInstaller (onedir, no UPX)
+        run: python -m PyInstaller --clean --noconfirm deploy\MasterSetting.spec
+
+      - name: Show build result
+        run: dir dist\MasterSetting
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MasterSetting-windows
+          path: dist/MasterSetting/**
+
+      - name: Attach to release (on tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/MasterSetting/**

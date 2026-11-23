@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .database import SessionLocal, engine
 from .models import Base, Role, User
-from .routers import agents, auth_users, catalog, releases
+from .routers import agents, auth_users, catalog, export, releases
 from .security import hash_password
 from .settings import settings
 
@@ -58,6 +58,7 @@ app.include_router(catalog.router)
 app.include_router(agents.router)
 app.include_router(agents.admin_router)
 app.include_router(releases.router)
+app.include_router(export.router)
 
 
 @app.get("/api/health")

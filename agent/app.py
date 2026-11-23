@@ -36,6 +36,7 @@ class MasterSettingApp(ctk.CTk):
         self.catalog = Catalog(config=self.config_obj)
         self.engine = ArchiveEngine(config=self.config_obj, catalog=self.catalog)
         self.sync = SyncClient(config=self.config_obj, catalog=self.catalog)
+        self.offline = self.sync.cache
         self._drive_poll_id = None
         self._sync_poll_id = None
 
@@ -134,8 +135,10 @@ class MasterSettingApp(ctk.CTk):
             self.server_label.configure(
                 text=f"Сервер: подключён (v{__version__})", text_color="#4ade80")
         else:
+            last = self.offline.last_sync_iso()
+            hint = f"офлайн-режим, кэш от {last}" if last else "офлайн-режим"
             self.server_label.configure(
-                text="Сервер: нет связи", text_color="#f87171")
+                text=f"Сервер: нет связи ({hint})", text_color="#fbbf24")
         self._sync_poll_id = self.after(3000, self._poll_sync)
 
     # ------------------------------------------------------------------
@@ -254,13 +257,18 @@ class OperationWindow(ctk.CTkToplevel):
 
     # ------------------------------------------------------------------
     def load_values(self):
+        cached = self.app.offline.get_config()
+
         operators = self.catalog.list_operators()
-        # Дополнительно сканируем папки архива
+        # Дополнительно сканируем папки архива и берём из офлайн-кэша
         if os.path.isdir(self.cfg.cameraman_path):
             for item in os.listdir(self.cfg.cameraman_path):
                 if os.path.isdir(os.path.join(self.cfg.cameraman_path, item)):
                     if item not in operators:
                         operators.append(item)
+        for op in cached.operators:
+            if op not in operators:
+                operators.append(op)
         operators.sort()
         self.operator_combo.configure_values(operators or [""])
 
@@ -271,6 +279,9 @@ class OperationWindow(ctk.CTkToplevel):
                     cam = line.strip()
                     if cam and cam not in cameras:
                         cameras.append(cam)
+        for cam in cached.cameras:
+            if cam not in cameras:
+                cameras.append(cam)
         cameras.sort()
         self.camera_combo.configure_values(cameras or [""])
 
@@ -303,7 +314,7 @@ class OperationWindow(ctk.CTkToplevel):
             messagebox.showerror("Ошибка", "Заполните все поля")
             return
 
-        # Для save — при новой камере допишем в список
+        # Для save — при новой камере допишем в список и в офлайн-кэш
         if self.mode == "save" and camera not in self.camera_combo.original_values:
             try:
                 with open(self.cfg.camera_file, "a", encoding="utf-8") as f:
@@ -311,6 +322,9 @@ class OperationWindow(ctk.CTkToplevel):
             except OSError:
                 pass
             self.catalog.add_camera(camera)
+            self.app.offline.merge_camera(camera)
+        self.catalog.add_operator(operator)
+        self.app.offline.merge_operator(operator)
 
         # Перезапись?
         overwrite = False

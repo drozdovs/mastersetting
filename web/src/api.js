@@ -66,8 +66,15 @@ export const api = {
   deleteCamera: (id) => request(`/api/cameras/${id}`, { method: "DELETE" }),
 
   agents: () => request("/api/agents"),
+  updateAgent: (id, data) =>
+    request(`/api/agents/${id}`, { method: "PATCH", body: data }),
+  deleteAgent: (id) => request(`/api/agents/${id}`, { method: "DELETE" }),
+  agentSettings: (id) => request(`/api/agents/${id}/settings`),
   events: (limit = 100) => request(`/api/events?limit=${limit}`),
   stats: () => request("/api/stats"),
+
+  exportCsvUrl: () => "/api/export/events.csv",
+  exportXlsUrl: () => "/api/export/events.xls",
 
   releases: () => request("/api/releases"),
   createRelease: (data) => request("/api/releases", { method: "POST", body: data }),

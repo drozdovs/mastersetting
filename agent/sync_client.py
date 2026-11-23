@@ -24,6 +24,8 @@ from mastersetting import __version__
 from mastersetting.catalog import Catalog
 from mastersetting.config import Config, app_data_dir
 
+from .offline_cache import OfflineCache, ServerConfig
+
 
 def _agent_id() -> str:
     """Постоянный идентификатор агента (сохраняется в файле)."""
@@ -55,6 +57,7 @@ class SyncClient:
         self._thread: threading.Thread | None = None
         self._token = self.config.server_token
         self._session = requests.Session()
+        self.cache = OfflineCache()
 
     # ------------------------------------------------------------------
     @property
@@ -155,6 +158,35 @@ class SyncClient:
         except Exception:
             return False
 
+    def fetch_config(self, defaults_cameras: list[str] | None = None) -> ServerConfig:
+        """Получить конфиг с сервера и закэшировать его.
+
+        При недоступности сервера возвращает закэшированный конфиг (или
+        значения по умолчанию) — благодаря этому агент работает офлайн.
+        """
+        if self.enabled and self._token:
+            try:
+                resp = self._session.get(
+                    self._url("/api/agent/config"),
+                    headers=self._headers(), timeout=10,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                cfg = ServerConfig(
+                    cameras=data.get("cameras", []),
+                    operators=data.get("operators", []),
+                    fetched_at=time.time(),
+                    source="server",
+                )
+                self.cache.store_config(cfg)
+                self.state.online = True
+                return cfg
+            except Exception as e:  # noqa: BLE001
+                self.state.online = False
+                self.state.last_error = str(e)
+        # Офлайн: отдаём кэш
+        return self.cache.get_config(defaults_cameras)
+
     def check_update(self) -> dict | None:
         """Вернуть описание доступного обновления или None."""
         try:
@@ -207,4 +239,7 @@ class SyncClient:
         while not self._stop.is_set():
             self.heartbeat()
             self.sync_events()
+            # Периодически обновляем конфиг (камеры/операторы) с сервера
+            if self.state.online:
+                self.fetch_config()
             self._stop.wait(self.config.heartbeat_seconds)

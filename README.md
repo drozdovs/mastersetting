@@ -29,14 +29,33 @@
 
 ```
 mastersetting/      # общее ядро (config, platform, filters, fs_ops, catalog, engine)
-agent/              # десктоп-агент: app.py (GUI), widgets.py, sync_client.py
+agent/              # десктоп-агент: app.py (GUI), widgets.py, sync_client.py, offline_cache.py
 server/             # FastAPI: app, models, routers, security
 web/                # React-админка (Vite)
-tests/              # pytest для ядра
+tests/              # pytest для ядра и офлайн-кэша
 cli.py              # headless-CLI агента
 main.py             # точка входа агента
 deploy/             # Docker, Caddy, PyInstaller, Inno Setup
+.github/workflows/  # CI: сборка .exe на windows-latest
 ```
+
+---
+
+## Офлайн-режим (работа без сервера)
+
+Ключевой принцип: **агент никогда не зависит от сервера.**
+
+- Все операции сохранения/загрузки выполняются локально и работают без сети.
+- Список камер и операторов берётся с сервера, но **кэшируется** в
+  `~/.mastersetting/offline_cache.json` (Windows: `%APPDATA%/MasterSetting/`).
+- При потере связи агент использует последний успешный кэш — списки не «пропадают».
+- События (журнал операций) накапливаются локально (SQLite, флаг `synced=0`) и
+  выгружаются на сервер автоматически, как только связь восстановится.
+- Если кэша ещё нет — используются значения по умолчанию из `camera.txt`.
+
+Индикатор в главном окне агента показывает состояние: «подключён» или
+«нет связи (офлайн-режим, кэш от &lt;дата&gt;)».
+
 
 ---
 
@@ -102,6 +121,14 @@ pytest tests/ -q
 ---
 
 ## Сборка Windows .exe
+
+### Автоматически (CI)
+
+GitHub Actions workflow `.github/workflows/build-windows.yml` собирает `.exe` на
+`windows-latest` при пуше тега `v*` или вручную (workflow_dispatch). Артефакт —
+`dist/MasterSetting/**`; на теге прикрепляется к релизу GitHub.
+
+### Вручную (на Windows-машине)
 
 ```bat
 deploy\build_agent.bat          REM onedir, без UPX

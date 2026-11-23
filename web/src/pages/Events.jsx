@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "../api.js";
+import { api, getToken } from "../api.js";
 
 export default function Events() {
   const [events, setEvents] = useState([]);
@@ -11,18 +11,41 @@ export default function Events() {
   }
   useEffect(load, [limit]);
 
+  function download(path, name) {
+    // Скачиваем с токеном через fetch -> blob
+    fetch(path, { headers: { Authorization: `Bearer ${getToken()}` } })
+      .then((r) => r.blob())
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = name;
+        a.click();
+        URL.revokeObjectURL(url);
+      })
+      .catch((e) => setError(e.message));
+  }
+
   return (
     <>
       <h2>Журнал операций</h2>
       {error && <div className="error">{error}</div>}
 
-      <div className="card row">
+      <div className="card row wrap">
         <span className="muted">Показать последних:</span>
         <select value={limit} onChange={(e) => setLimit(Number(e.target.value))}
                 style={{ width: 120 }}>
           {[50, 100, 250, 500].map((n) => <option key={n} value={n}>{n}</option>)}
         </select>
         <button className="ghost" onClick={load}>Обновить</button>
+        <div className="grow" />
+        <button className="ghost"
+                onClick={() => download(api.exportCsvUrl(), "events.csv")}>
+          Экспорт CSV
+        </button>
+        <button onClick={() => download(api.exportXlsUrl(), "events.xls")}>
+          Экспорт Excel
+        </button>
       </div>
 
       <div className="card">
