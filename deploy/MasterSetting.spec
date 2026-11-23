@@ -16,6 +16,10 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 block_cipher = None
 
+# Абсолютные пути — spec запускается из корня репозитория в CI
+_HERE = os.path.dirname(os.path.abspath(SPEC))
+_ROOT = os.path.dirname(_HERE)
+
 # Данные customtkinter (темы, шрифты, ассеты) обязательны
 datas = collect_data_files("customtkinter")
 hiddenimports = (
@@ -24,8 +28,8 @@ hiddenimports = (
 )
 
 a = Analysis(
-    ["../main.py"],
-    pathex=[".."],
+    [os.path.join(_ROOT, "main.py")],
+    pathex=[_ROOT],
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
@@ -52,7 +56,7 @@ exe = EXE(
     upx=False,               # КРИТИЧНО: не использовать UPX
     console=False,           # GUI-приложение
     disable_windowed_traceback=False,
-    version="../deploy/version_info.txt",  # при необходимости
+    version=os.path.join(_HERE, "version_info.txt"),
 )
 
 coll = COLLECT(

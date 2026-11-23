@@ -29,15 +29,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt pyinstaller
 
-      - name: Write version info
-        run: |
-          $ver = "${{ github.event.inputs.version }}"
-          if (-not $ver) { $ver = "${{ github.ref_name }}".TrimStart('v') }
-          if (-not $ver) { $ver = "2.0.0" }
-          (Get-Content deploy/version_info.txt) -replace '2, 0, 0, 0', ($ver -replace '\.', ', ') `
-            -replace "u'2.0.0.0'", "u'$ver.0'" | Set-Content deploy/version_info.txt
-        shell: pwsh
-
       - name: Build with PyInstaller (onedir, no UPX)
         run: python -m PyInstaller --clean --noconfirm deploy\MasterSetting.spec
 
