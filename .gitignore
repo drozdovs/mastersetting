@@ -5,10 +5,12 @@ __pycache__/
 .eggs/
 build/
 dist/
-*.spec
 .venv/
 venv/
 env/
+# Наша спека PyInstaller нужна в репозитории (для CI); остальные — артефакты сборки
+*.spec
+!deploy/MasterSetting.spec
 
 # === MasterSetting runtime ===
 # Локальная база каталога, логи и рабочие файлы
