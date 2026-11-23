@@ -1,13 +1,11 @@
-# Сборочный образ для Windows-агента MasterSetting.
-# Собирает MasterSetting.exe + установщик под Wine на Linux —
-# без Windows-машины и без GitHub Actions.
+# Сборочный образ для портативной Windows-сборки MasterSetting.
+# Собирает MasterSetting.exe под Wine на Linux — без Windows-машины и без GitHub.
 #
 # Сборка образа:
 #   docker build -t ms-build -f deploy/Dockerfile.wine-build .
 # Запуск:
 #   docker run --rm -v "$PWD":/src ms-build
-# Результат: dist/MasterSetting/MasterSetting.exe,
-#            dist/MasterSetting-Setup-2.0.0.exe
+# Результат: dist/MasterSetting/MasterSetting.exe (+ zip в deploy/build_in_wine.sh)
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -15,22 +13,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     WINEPREFIX=/root/.wine \
     WINEARCH=win64
 
-# --- Wine (64- и 32-бит: 32-бит нужен для Inno Setup) + утилиты ---
+# --- Wine + утилиты (полная сборка Python с tkinter не требует wine32) ---
 RUN dpkg --add-architecture i386 \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-        wine64 wine32:i386 winbind cabextract xvfb wget unzip ca-certificates \
+        wine64 wine32:i386 winbind cabextract xvfb wget unzip python3 ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-
-# --- Установщики Windows: Inno Setup во втором (win32) префиксе ---
-# (скрипт сборки установит Python сам; Inno Setup ставим заранее, чтобы
-#  образ не тянул его на каждой сборке)
-RUN mkdir -p /opt
-COPY deploy/inno/innosetup-6.7.1.exe /opt/innosetup.exe
-RUN WINEPREFIX=/root/.wine-inno WINEARCH=win32 xvfb-run -a wine wineboot --init \
-    && WINEPREFIX=/root/.wine-inno WINEARCH=win32 xvfb-run -a wine /opt/innosetup.exe \
-        /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- \
-    && rm -f /opt/innosetup.exe
 
 WORKDIR /src
 COPY deploy/build_in_wine.sh /usr/local/bin/build_in_wine.sh

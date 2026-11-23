@@ -1,6 +1,6 @@
 name: Build Windows Agent
 
-# Собирает MasterSetting.exe (onedir) и установщик Inno Setup.
+# Собирает портативную сборку MasterSetting (onedir zip).
 # Запуск: вручную (workflow_dispatch) или на тег вида v2.0.0.
 #
 # Основной путь сборки — свой сервер (deploy/build_on_server.sh).
@@ -40,35 +40,17 @@ jobs:
       - name: Show build result
         run: dir dist\MasterSetting
 
-      - name: Install Inno Setup
-        run: choco install innosetup --no-progress -y
-
-      - name: Build installer (Inno Setup)
-        run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" deploy\installer.iss
-
-      - name: Show installer
-        run: dir dist\*.exe
-
-      - name: Package onedir zip
+      - name: Package portable zip
         run: Compress-Archive -Path dist\MasterSetting\* -DestinationPath MasterSetting-windows.zip
 
-      - name: Upload onedir artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: MasterSetting-windows
-          path: dist/MasterSetting/**
-
-      - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: MasterSetting-installer
-          path: dist/MasterSetting-Setup-*.exe
+          path: MasterSetting-windows.zip
 
       - name: Attach to release (on tag)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            MasterSetting-windows.zip
-            dist/MasterSetting-Setup-*.exe
+          files: MasterSetting-windows.zip

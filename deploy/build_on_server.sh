@@ -64,15 +64,17 @@ rm -rf build dist
 wpy -m PyInstaller --clean --noconfirm "deploy\\MasterSetting.spec"
 ls -la dist/MasterSetting/MasterSetting.exe
 
-echo "==> 5/5 Установщик Inno Setup (отдельный win32-префикс)"
-ISCC="/root/.wine-inno/drive_c/Program Files/Inno Setup 6/ISCC.exe"
-if [ -f "$ISCC" ]; then
-    WINEPREFIX=/root/.wine-inno script -qec \
-        "xvfb-run -a wine \"$ISCC\" \"deploy\\\\installer.iss\"" /dev/null
-    ls -la dist/MasterSetting-Setup-*.exe
-else
-    echo "   Inno Setup не установлен — пропускаю установщик"
-fi
+echo "==> 5/5 Портативный архив (zip)"
+# Только portable-версия: распаковать и запустить MasterSetting.exe.
+VER="$(grep -oE '__version__ = "[^"]+"' mastersetting/__init__.py | head -1 | cut -d'"' -f2)"
+VER="${VER:-2.0.0}"
+rm -f "$OUT_DIR/MasterSetting-windows-$VER.zip"
+python3 - "$OUT_DIR" "$VER" <<'PY'
+import shutil, sys
+out, ver = sys.argv[1], sys.argv[2]
+shutil.make_archive(f"{out}/MasterSetting-windows-{ver}", "zip", f"{out}/src/dist", "MasterSetting")
+PY
+ls -la "$OUT_DIR/MasterSetting-windows-$VER.zip"
+sha256sum "$OUT_DIR/MasterSetting-windows-$VER.zip"
 
-echo "==> Готово. Артефакты в $OUT_DIR/src/dist"
-ls -la dist/
+echo "==> Готово. Артефакт: $OUT_DIR/MasterSetting-windows-$VER.zip"

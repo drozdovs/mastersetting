@@ -1,29 +1,24 @@
 #!/usr/bin/env bash
-# Сборка MasterSetting.exe внутри Wine-контейнера.
-# Ожидает исходники в /src, результат — в /src/dist.
+# Портативная сборка MasterSetting.exe внутри Wine-контейнера.
+# Ожидает исходники в /src, результат — /src/dist + zip.
 #
-# Использует тот же проверенный подход, что и deploy/build_on_server.sh:
-# embeddable Python + запуск через псевдо-терминал (иначе Wine ломает stdio).
+# Тот же проверенный подход, что и deploy/build_on_server.sh:
+# python-build-standalone (С tkinter) + запуск через псевдо-терминал.
 set -euo pipefail
 
 export WINEPREFIX=/root/.wine WINEDEBUG=-all WINEARCH=win64
-PY="$WINEPREFIX/drive_c/Python312/python.exe"
+PY="$WINEPREFIX/drive_c/python/python.exe"
 
-wpy() { script -qec "xvfb-run -a wine $PY $*" /dev/null; }
+wpy() { script -qec "stty cols 400 2>/dev/null; xvfb-run -a wine $PY $*" /dev/null; }
 
-echo "==> Windows-Python (embeddable 3.12)"
+echo "==> Windows-Python (python-build-standalone, С tkinter)"
 if [ ! -f "$PY" ]; then
-    PYD="$WINEPREFIX/drive_c/Python312"
-    mkdir -p "$PYD"
-    wget -q -O /tmp/py.zip \
-        https://www.python.org/ftp/python/3.12.7/python-3.12.7-embed-amd64.zip
-    unzip -o -q /tmp/py.zip -d "$PYD"
-    sed -i "s/#import site/import site/" "$PYD/python312._pth"
-    grep -q 'site-packages' "$PYD/python312._pth" || echo 'Lib\site-packages' >> "$PYD/python312._pth"
-    wget -q -O "$PYD/get-pip.py" https://bootstrap.pypa.io/get-pip.py
-    wpy "$PYD/get-pip.py" --no-warn-script-location
-    xvfb-run -a wine wineboot --init >/dev/null 2>&1 || true
+    wget -q -O /tmp/fullpy.tar.gz \
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.12.16+20261110-x86_64-pc-windows-msvc-install_only.tar.gz"
+    tar -xzf /tmp/fullpy.tar.gz -C "$WINEPREFIX/drive_c/"
 fi
+wpy -c "import tkinter, sys; sys.exit(0 if tkinter.TkVersion else 1)" \
+    || { echo "ОШИБКА: tkinter недоступен в сборочном Python" >&2; exit 1; }
 
 echo "==> Зависимости"
 wpy -m pip install --upgrade pip
@@ -35,12 +30,15 @@ rm -rf build dist
 wpy -m PyInstaller --clean --noconfirm 'deploy\MasterSetting.spec'
 ls -la /src/dist/MasterSetting/MasterSetting.exe
 
-echo "==> Inno Setup (установщик)"
-ISCC="/root/.wine-inno/drive_c/Program Files/Inno Setup 6/ISCC.exe"
-if [ -f "$ISCC" ]; then
-    WINEPREFIX=/root/.wine-inno script -qec \
-        "xvfb-run -a wine \"$ISCC\" \"deploy\\\\installer.iss\"" /dev/null
-    ls -la /src/dist/*.exe
-fi
+echo "==> Портативный архив (zip)"
+VER="$(grep -oE '__version__ = "[^"]+"' mastersetting/__init__.py | head -1 | cut -d'"' -f2)"
+VER="${VER:-2.0.0}"
+rm -f "/src/MasterSetting-windows-$VER.zip"
+python3 - "$VER" <<'PY'
+import shutil, sys
+ver = sys.argv[1]
+shutil.make_archive(f"/src/MasterSetting-windows-{ver}", "zip", "/src/dist", "MasterSetting")
+PY
+ls -la "/src/MasterSetting-windows-$VER.zip"
 
 echo "==> Готово"

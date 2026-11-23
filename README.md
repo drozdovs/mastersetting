@@ -35,7 +35,7 @@ web/                # React-админка (Vite)
 tests/              # pytest для ядра и офлайн-кэша
 cli.py              # headless-CLI агента
 main.py             # точка входа агента
-deploy/             # Docker, Caddy, PyInstaller, Inno Setup
+deploy/             # Docker, Caddy, PyInstaller spec, сборка .exe
 .github/workflows/  # CI: резервная сборка .exe (основная — deploy/build_on_server.sh)
 ```
 
@@ -120,7 +120,10 @@ pytest tests/ -q
 
 ---
 
-## Сборка Windows .exe
+## Сборка Windows .exe (портативная)
+
+Программа распространяется **только как портативная сборка**: распаковать архив
+и запустить `MasterSetting.exe`. Установщик не используется.
 
 ### На своём сервере (основной способ)
 
@@ -138,35 +141,27 @@ apt-get install -y --no-install-recommends \
 bash deploy/build_on_server.sh
 ```
 
-Результат:
-- `dist/MasterSetting/MasterSetting.exe` — приложение (onedir, с иконкой);
-- `dist/MasterSetting-Setup-2.0.0.exe` — установщик Inno Setup.
+Результат: `MasterSetting-windows-<версия>.zip` (папка `MasterSetting/`
+с `MasterSetting.exe` внутри — распаковать и запустить).
 
 Ключевые детали окружения:
-- Windows-Python ставится как **embeddable**-сборка в Wine;
+- Windows-Python ставится как **python-build-standalone** (install_only) —
+  обязательно **с tkinter**, иначе CustomTkinter не запустится
+  (embeddable-Python tkinter не содержит — так был баг «приложение не стартует»);
 - Wine ломает stdio Python при выводе в пайп, поэтому запуск идёт через
-  псевдо-терминал (`script -qec`) — см. обёртку `wpy` в скрипте;
-- Inno Setup — 32-битный, компилируется в отдельном `win32`-префиксе
-  (`WINEPREFIX=/root/.wine-inno`).
+  псевдо-терминал (`script -qec`) — см. обёртку `wpy` в скрипте.
 
 Готовые сборки выкладываются в `/var/www/ms-downloads` и раздаются Caddy:
-`https://mastersettings.app.dsdp.ru/downloads/MasterSetting-Setup-2.0.0.exe`.
+`https://mastersettings.app.dsdp.ru/downloads/MasterSetting-windows-2.0.0.zip`.
 
 ### Резервно (GitHub Actions)
 
-`.github/workflows/build-windows.yml` собирает `.exe` и установщик на
+`.github/workflows/build-windows.yml` собирает портативный zip на
 `windows-latest` при пуше тега `v*` или вручную:
 
 ```bash
 gh workflow run build-windows.yml -f version=2.0.0
 gh run watch
-```
-
-### Вручную (на Windows-машине)
-
-```bat
-deploy\build_agent.bat          REM onedir, без UPX
-iscc deploy\installer.iss       REM установщик Inno Setup
 ```
 
 Меры против ложных срабатываний антивируса:
@@ -184,8 +179,7 @@ iscc deploy\installer.iss       REM установщик Inno Setup
 python deploy/make_icon.py     # -> deploy/icon.ico + deploy/icon.png
 ```
 
-Она встроена в `.exe` (через `MasterSetting.spec`), в установщик
-(`installer.iss`) и в окно GUI (`agent/app.py`).
+Она встроена в `.exe` (через `MasterSetting.spec`) и в окно GUI (`agent/app.py`).
 
 ---
 
