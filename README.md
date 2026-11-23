@@ -36,7 +36,7 @@ tests/              # pytest для ядра и офлайн-кэша
 cli.py              # headless-CLI агента
 main.py             # точка входа агента
 deploy/             # Docker, Caddy, PyInstaller, Inno Setup
-.github/workflows/  # CI: сборка .exe на windows-latest
+.github/workflows/  # CI: резервная сборка .exe (основная — deploy/build_on_server.sh)
 ```
 
 ---
@@ -122,24 +122,45 @@ pytest tests/ -q
 
 ## Сборка Windows .exe
 
-### Автоматически (CI)
+### На своём сервере (основной способ)
 
-GitHub Actions workflow `.github/workflows/build-windows.yml` собирает `.exe` на
-`windows-latest` при пуше тега `v*` или вручную (workflow_dispatch). Артефакт —
-`dist/MasterSetting/**`; на теге прикрепляется к релизу GitHub.
+Сборка идёт на нашем Linux-сервере через **Wine** — Windows-машина и GitHub не
+нужны. Скрипт: `deploy/build_on_server.sh`.
 
-**Готовый релиз:** https://github.com/drozdovs/mastersetting/releases/tag/v2.0.0
-(архив `MasterSetting-windows-2.0.0.zip`, ~23 МБ).
+```bash
+# Один раз — зависимости (Ubuntu 24.04):
+dpkg --add-architecture i386
+apt-get update
+apt-get install -y --no-install-recommends \
+    wine64 wine32:i386 winbind cabextract xvfb unzip wget
 
-Запустить сборку вручную:
+# Каждая сборка:
+bash deploy/build_on_server.sh
+```
+
+Результат:
+- `dist/MasterSetting/MasterSetting.exe` — приложение (onedir, с иконкой);
+- `dist/MasterSetting-Setup-2.0.0.exe` — установщик Inno Setup.
+
+Ключевые детали окружения:
+- Windows-Python ставится как **embeddable**-сборка в Wine;
+- Wine ломает stdio Python при выводе в пайп, поэтому запуск идёт через
+  псевдо-терминал (`script -qec`) — см. обёртку `wpy` в скрипте;
+- Inno Setup — 32-битный, компилируется в отдельном `win32`-префиксе
+  (`WINEPREFIX=/root/.wine-inno`).
+
+Готовые сборки выкладываются в `/var/www/ms-downloads` и раздаются Caddy:
+`https://mastersettings.app.dsdp.ru/downloads/MasterSetting-Setup-2.0.0.exe`.
+
+### Резервно (GitHub Actions)
+
+`.github/workflows/build-windows.yml` собирает `.exe` и установщик на
+`windows-latest` при пуше тега `v*` или вручную:
 
 ```bash
 gh workflow run build-windows.yml -f version=2.0.0
 gh run watch
 ```
-
-Артефакт также загружен в систему автообновления MasterSetting (сервер) как
-версия `2.0.0` — агенты скачивают её с проверкой SHA-256.
 
 ### Вручную (на Windows-машине)
 
@@ -154,6 +175,17 @@ iscc deploy\installer.iss       REM установщик Inno Setup
 2. Version-info и манифест (уже в `deploy/`).
 3. **Подпись кода** (`signtool`) — OV/EV сертификат.
 4. Отправка сборки в Microsoft Defender как ложное срабатывание.
+
+### Иконка приложения
+
+Иконка генерируется скриптом `deploy/make_icon.py` (синяя SD-карта «MS»):
+
+```bash
+python deploy/make_icon.py     # -> deploy/icon.ico + deploy/icon.png
+```
+
+Она встроена в `.exe` (через `MasterSetting.spec`), в установщик
+(`installer.iss`) и в окно GUI (`agent/app.py`).
 
 ---
 

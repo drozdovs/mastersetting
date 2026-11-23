@@ -1,32 +1,46 @@
 #!/usr/bin/env bash
-# Сборка MasterSetting.exe внутри Wine-контейнера (Linux).
-# Ожидает исходники в /src, результат кладёт в /src/dist.
+# Сборка MasterSetting.exe внутри Wine-контейнера.
+# Ожидает исходники в /src, результат — в /src/dist.
+#
+# Использует тот же проверенный подход, что и deploy/build_on_server.sh:
+# embeddable Python + запуск через псевдо-терминал (иначе Wine ломает stdio).
 set -euo pipefail
 
-source /root/.venv-win/bin/activate 2>/dev/null || true
+export WINEPREFIX=/root/.wine WINEDEBUG=-all WINEARCH=win64
+PY="$WINEPREFIX/drive_c/Python312/python.exe"
 
-echo "==> Установка зависимостей Windows-Python"
-wine python -m pip install --upgrade pip >/dev/null
-wine python -m pip install -r /src/requirements.txt pyinstaller >/dev/null
+wpy() { script -qec "xvfb-run -a wine $PY $*" /dev/null; }
 
-echo "==> Иконка (если нет — генерируем)"
-if [ ! -f /src/deploy/icon.ico ]; then
-  wine python /src/deploy/make_icon.py || true
+echo "==> Windows-Python (embeddable 3.12)"
+if [ ! -f "$PY" ]; then
+    PYD="$WINEPREFIX/drive_c/Python312"
+    mkdir -p "$PYD"
+    wget -q -O /tmp/py.zip \
+        https://www.python.org/ftp/python/3.12.7/python-3.12.7-embed-amd64.zip
+    unzip -o -q /tmp/py.zip -d "$PYD"
+    sed -i "s/#import site/import site/" "$PYD/python312._pth"
+    grep -q 'site-packages' "$PYD/python312._pth" || echo 'Lib\site-packages' >> "$PYD/python312._pth"
+    wget -q -O "$PYD/get-pip.py" https://bootstrap.pypa.io/get-pip.py
+    wpy "$PYD/get-pip.py" --no-warn-script-location
+    xvfb-run -a wine wineboot --init >/dev/null 2>&1 || true
 fi
 
-echo "==> PyInstaller (onedir, без UPX)"
+echo "==> Зависимости"
+wpy -m pip install --upgrade pip
+wpy -m pip install -r /src/requirements.txt pyinstaller
+
+echo "==> PyInstaller (onedir, без UPX, с иконкой)"
 cd /src
 rm -rf build dist
-xvfb-run -a wine python -m PyInstaller --clean --noconfirm deploy/MasterSetting.spec
-
-echo "==> Проверка результата"
+wpy -m PyInstaller --clean --noconfirm 'deploy\MasterSetting.spec'
 ls -la /src/dist/MasterSetting/MasterSetting.exe
 
 echo "==> Inno Setup (установщик)"
-if command -v wine >/dev/null && [ -f "/root/.wine/drive_c/Program Files (x86)/Inno Setup 6/ISCC.exe" ]; then
-  xvfb-run -a wine "/root/.wine/drive_c/Program Files (x86)/Inno Setup 6/ISCC.exe" \
-      "/src/deploy/installer.iss" || echo "Inno Setup: пропущено (ошибка)"
-  ls -la /src/dist/*.exe 2>/dev/null || true
+ISCC="/root/.wine-inno/drive_c/Program Files/Inno Setup 6/ISCC.exe"
+if [ -f "$ISCC" ]; then
+    WINEPREFIX=/root/.wine-inno script -qec \
+        "xvfb-run -a wine \"$ISCC\" \"deploy\\\\installer.iss\"" /dev/null
+    ls -la /src/dist/*.exe
 fi
 
 echo "==> Готово"

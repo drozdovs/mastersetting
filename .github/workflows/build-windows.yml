@@ -1,7 +1,10 @@
 name: Build Windows Agent
 
-# Собирает MasterSetting.exe на windows-latest и прикрепляет к релизу.
+# Собирает MasterSetting.exe (onedir) и установщик Inno Setup.
 # Запуск: вручную (workflow_dispatch) или на тег вида v2.0.0.
+#
+# Основной путь сборки — свой сервер (deploy/build_on_server.sh).
+# Этот workflow оставлен как резервный/для тегов.
 
 on:
   workflow_dispatch:
@@ -31,20 +34,41 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt pyinstaller
 
-      - name: Build with PyInstaller (onedir, no UPX)
+      - name: Build with PyInstaller (onedir, no UPX, icon)
         run: python -m PyInstaller --clean --noconfirm deploy\MasterSetting.spec
 
       - name: Show build result
         run: dir dist\MasterSetting
 
-      - name: Upload artifact
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer (Inno Setup)
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" deploy\installer.iss
+
+      - name: Show installer
+        run: dir dist\*.exe
+
+      - name: Package onedir zip
+        run: Compress-Archive -Path dist\MasterSetting\* -DestinationPath MasterSetting-windows.zip
+
+      - name: Upload onedir artifact
         uses: actions/upload-artifact@v4
         with:
           name: MasterSetting-windows
           path: dist/MasterSetting/**
 
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MasterSetting-installer
+          path: dist/MasterSetting-Setup-*.exe
+
       - name: Attach to release (on tag)
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/MasterSetting/**
+          files: |
+            MasterSetting-windows.zip
+            dist/MasterSetting-Setup-*.exe
