@@ -128,6 +128,19 @@ GitHub Actions workflow `.github/workflows/build-windows.yml` собирает `
 `windows-latest` при пуше тега `v*` или вручную (workflow_dispatch). Артефакт —
 `dist/MasterSetting/**`; на теге прикрепляется к релизу GitHub.
 
+**Готовый релиз:** https://github.com/drozdovs/mastersetting/releases/tag/v2.0.0
+(архив `MasterSetting-windows-2.0.0.zip`, ~23 МБ).
+
+Запустить сборку вручную:
+
+```bash
+gh workflow run build-windows.yml -f version=2.0.0
+gh run watch
+```
+
+Артефакт также загружен в систему автообновления MasterSetting (сервер) как
+версия `2.0.0` — агенты скачивают её с проверкой SHA-256.
+
 ### Вручную (на Windows-машине)
 
 ```bat

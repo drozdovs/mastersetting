@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import threading
 import tkinter as tk
 from tkinter import messagebox
@@ -29,6 +30,16 @@ ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("dark-blue")
 
 
+def resource_path(relative: str) -> str:
+    """Путь к ресурсу, работающий и в исходниках, и в собранном .exe."""
+    base = getattr(sys, "_MEIPASS", None)
+    if base:
+        return os.path.join(base, relative)
+    # Рядом с пакетом agent/ лежит корень проекта; иконка в deploy/
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(root, relative)
+
+
 class MasterSettingApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -41,6 +52,7 @@ class MasterSettingApp(ctk.CTk):
         self._sync_poll_id = None
 
         self.title("MasterSetting")
+        self._set_window_icon()
         self.geometry("420x340")
         self.resizable(False, False)
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -61,6 +73,25 @@ class MasterSettingApp(ctk.CTk):
             with open(self.config_obj.camera_file, "w", encoding="utf-8") as f:
                 f.write("PanasonicAG-CX350\nSonyZ90\nSonyFX3\nSonyFX6\n"
                         "PanasonicAG-PX5000\nPanasonic270")
+
+    def _set_window_icon(self):
+        """Установить иконку окна (и панели задач) из встроенного ресурса."""
+        try:
+            ico = resource_path(os.path.join("deploy", "icon.ico"))
+            if os.path.exists(ico):
+                self.iconbitmap(ico)
+                return
+        except Exception:
+            pass
+        try:
+            png = resource_path(os.path.join("deploy", "icon.png"))
+            if os.path.exists(png):
+                from PIL import Image, ImageTk
+                img = ImageTk.PhotoImage(Image.open(png))
+                self.iconphoto(True, img)
+                self._icon_ref = img  # держим ссылку, иначе GC уберёт
+        except Exception:
+            pass
 
     def center_window(self):
         self.update_idletasks()

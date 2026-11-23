@@ -19,6 +19,9 @@ OutputBaseFilename=MasterSetting-Setup-{#MyAppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+; Иконка установщика и приложения
+SetupIconFile=icon.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
 ; Установка для всех пользователей
 PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -33,8 +36,8 @@ Name: "desktopicon"; Description: "Создать ярлык на рабочем
 Source: "..\dist\MasterSetting\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Запустить {#MyAppName}"; Flags: nowait postinstall skipifsilent

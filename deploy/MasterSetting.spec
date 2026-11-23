@@ -22,6 +22,11 @@ _ROOT = os.path.dirname(_HERE)
 
 # Данные customtkinter (темы, шрифты, ассеты) обязательны
 datas = collect_data_files("customtkinter")
+# Иконка приложения — кладём рядом, чтобы окно могло её подхватить
+datas += [
+    (os.path.join(_HERE, "icon.ico"), "deploy"),
+    (os.path.join(_HERE, "icon.png"), "deploy"),
+]
 hiddenimports = (
     collect_submodules("customtkinter")
     + ["PIL", "requests", "sqlite3", "tkinter", "tkinter.filedialog"]
@@ -57,6 +62,7 @@ exe = EXE(
     console=False,           # GUI-приложение
     disable_windowed_traceback=False,
     version=os.path.join(_HERE, "version_info.txt"),
+    icon=os.path.join(_HERE, "icon.ico"),
 )
 
 coll = COLLECT(

@@ -1,0 +1,42 @@
+# Сборочный образ для Windows-агента MasterSetting.
+# Собирает MasterSetting.exe под Wine на Linux — без Windows-машины и без GitHub.
+#
+# Образ на базе python:3.12 (Linux), поверх — Wine для запуска Windows-Python.
+# Итог: dist/MasterSetting/MasterSetting.exe + установщик Inno Setup.
+FROM python:3.12-slim
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    WINEDEBUG=-all \
+    WINEPREFIX=/root/.wine \
+    WINEARCH=win64 \
+    PYTHONUNBUFFERED=1
+
+# --- Wine и утилиты ---
+RUN dpkg --add-architecture i386 \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        wine64 wine32 winbind cabextract xvfb curl wget unzip ca-certificates \
+        fonts-wine \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- Windows-Python внутрь Wine ---
+ARG PY_VER=3.12.7
+RUN mkdir -p /opt/winpy \
+    && wget -q -O /tmp/python.exe https://www.python.org/ftp/python/${PY_VER}/python-${PY_VER}-amd64.exe \
+    && xvfb-run -a wine /tmp/python.exe /quiet InstallAllUsers=1 PrependPath=1 Include_test=0 \
+    && rm -f /tmp/python.exe
+
+ENV WINEPATH="C:\\users\\root\\AppData\\Local\\Programs\\Python\\Python312;C:\\users\\root\\AppData\\Local\\Programs\\Python\\Python312\\Scripts"
+
+# --- Inno Setup (для установщика) ---
+ARG INNO_VER=6.3.3
+RUN wget -q -O /tmp/innosetup.exe \
+      "https://files.jrsoftware.org/is/6/innosetup-${INNO_VER}.exe" \
+    && xvfb-run -a wine /tmp/innosetup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART \
+    && rm -f /tmp/inno*.exe
+
+WORKDIR /src
+COPY deploy/build_in_wine.sh /usr/local/bin/build_in_wine.sh
+RUN chmod +x /usr/local/bin/build_in_wine.sh
+
+ENTRYPOINT ["/usr/local/bin/build_in_wine.sh"]
