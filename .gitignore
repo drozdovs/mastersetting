@@ -1,0 +1,38 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+*.spec
+.venv/
+venv/
+env/
+
+# === MasterSetting runtime ===
+# Локальная база каталога, логи и рабочие файлы
+*.db
+*.db-journal
+*.log
+.ms_cache/
+
+# === Secrets / server ===
+.env
+*.pem
+*.key
+secrets/
+
+# === Web ===
+node_modules/
+web/dist/
+web/.vite/
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === IDE ===
+.idea/
+.vscode/

@@ -1,0 +1,9 @@
+# Ядро десктоп-агента (Windows-first, работает и на macOS/Linux)
+customtkinter>=5.2
+Pillow>=10.0
+
+# Сервер и обмен с ним
+requests>=2.31
+
+# Тесты
+pytest>=8.0
