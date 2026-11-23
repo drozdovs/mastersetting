@@ -6,8 +6,9 @@ from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .database import SessionLocal, engine
@@ -66,7 +67,22 @@ def health():
     return {"status": "ok", "version": app.version}
 
 
-# Раздача собранной веб-админки (если есть)
+# Раздача собранной веб-админки (если есть).
+# ВАЖНО: StaticFiles не умеет SPA-fallback, поэтому deep-link маршруты
+# React Router (/releases, /agents, …) отдавали бы 404. Монтируем assets,
+# а все прочие не-API пути возвращают index.html.
 _web_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", "dist")
 if os.path.isdir(_web_dist):
-    app.mount("/", StaticFiles(directory=_web_dist, html=True), name="web")
+    _assets = os.path.join(_web_dist, "assets")
+    if os.path.isdir(_assets):
+        app.mount("/assets", StaticFiles(directory=_assets), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa_fallback(full_path: str):
+        # Неизвестные API-пути — честный 404, а не index.html
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not found")
+        candidate = os.path.join(_web_dist, full_path)
+        if full_path and os.path.isfile(candidate):
+            return FileResponse(candidate)
+        return FileResponse(os.path.join(_web_dist, "index.html"))
