@@ -3,7 +3,7 @@
 # Сборка MasterSetting.exe + установщика на своём сервере.
 # Linux + Wine. Без Windows-машины и без GitHub Actions.
 #
-# Проверено на Ubuntu 24.04 / Wine 9.0 / Python 3.12 (embeddable).
+# Проверено на Ubuntu 24.04 / Wine 9.0 / Python 3.12 (python-build-standalone).
 # Запуск на сервере:  bash deploy/build_on_server.sh
 #
 # Зависимости (устанавливаются один раз):
@@ -19,15 +19,16 @@ OUT_DIR="${OUT_DIR:-/root/msbuild}"              # рабочая папка с�
 WINEPREFIX="${WINEPREFIX:-/root/.wine}"
 export WINEPREFIX WINEDEBUG=-all WINEARCH=win64
 
-PY="/root/.wine/drive_c/Python312/python.exe"
+PY="$WINEPREFIX/drive_c/python/python.exe"
 
 # --- Обёртка над wine-python ---
 # КРИТИЧНО: Wine ломает stdio Python при перенаправлении вывода в pipe
 # ("init_sys_streams ... Invalid handle"). Поэтому запускаем через
 # псевдо-терминал (script -qec), который даёт Wine настоящую консоль.
+# Широкий терминал — чтобы длинные Windows-пути не переносились.
 wpy() {
     local args="$*"
-    script -qec "xvfb-run -a wine $PY $args" /dev/null
+    script -qec "stty cols 400 2>/dev/null; xvfb-run -a wine $PY $args" /dev/null
 }
 
 echo "==> 1/5 Синхронизация исходников"
@@ -38,19 +39,21 @@ rsync -a --delete \
     "$APP_DIR/" "$OUT_DIR/src/"
 cd "$OUT_DIR/src"
 
-echo "==> 2/5 Проверка Windows-Python (embeddable 3.12)"
-if ! wpy --version >/dev/null 2>&1; then
-    PYD="/root/.wine/drive_c/Python312"
-    mkdir -p "$PYD"
-    wget -q -O /tmp/pyembed.zip \
-        https://www.python.org/ftp/python/3.12.7/python-3.12.7-embed-amd64.zip
-    unzip -o -q /tmp/pyembed.zip -d "$PYD"
-    PTH="$PYD/python312._pth"
-    sed -i "s/#import site/import site/" "$PTH"
-    grep -q 'site-packages' "$PTH" || echo 'Lib\site-packages' >> "$PTH"
-    wget -q -O "$PYD/get-pip.py" https://bootstrap.pypa.io/get-pip.py
-    wpy "$PYD/get-pip.py" --no-warn-script-location
+echo "==> 2/5 Проверка Windows-Python (python-build-standalone, С tkinter)"
+# ВАЖНО: embeddable-Python НЕ содержит tkinter, из-за чего .exe падал при
+# старте (CustomTkinter без tkinter). Используем полную сборку
+# python-build-standalone (install_only) — там tkinter/tcl/tk есть.
+PYD="$WINEPREFIX/drive_c/python"
+PY="$PYD/python.exe"
+if [ ! -f "$PY" ]; then
+    wget -q -O /tmp/fullpy.tar.gz \
+        "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.12.16+20261110-x86_64-pc-windows-msvc-install_only.tar.gz"
+    tar -xzf /tmp/fullpy.tar.gz -C "$WINEPREFIX/drive_c/"
 fi
+
+# Жёсткая проверка: без tkinter сборка бессмысленна
+wpy -c "import tkinter, sys; sys.exit(0 if tkinter.TkVersion else 1)" \
+    || { echo "ОШИБКА: tkinter недоступен в сборочном Python" >&2; exit 1; }
 
 echo "==> 3/5 Зависимости (requirements + pyinstaller)"
 wpy -m pip install --upgrade pip

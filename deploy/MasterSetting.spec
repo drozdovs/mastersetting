@@ -16,6 +16,18 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 block_cipher = None
 
+# --- Страж: tkinter обязателен ---
+# CustomTkinter не запустится без tkinter. Embeddable-Python его не содержит,
+# поэтому сборка должна падать громко, а не выпускать нерабочий .exe.
+try:
+    import tkinter  # noqa: F401
+except Exception as exc:  # pragma: no cover
+    raise SystemExit(
+        "ОШИБКА: в сборочном Python нет tkinter — приложение не запустится.\n"
+        "Используйте полную сборку Python (python-build-standalone install_only),\n"
+        "а не embeddable. Детали: %s" % exc
+    )
+
 # Абсолютные пути — spec запускается из корня репозитория в CI
 _HERE = os.path.dirname(os.path.abspath(SPEC))
 _ROOT = os.path.dirname(_HERE)
