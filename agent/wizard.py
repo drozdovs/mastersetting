@@ -18,6 +18,7 @@ GUI не содержит бизнес-логики — только шаги и
 from __future__ import annotations
 
 import os
+import queue
 import threading
 
 import customtkinter as ctk
@@ -71,6 +72,7 @@ class Wizard(ctk.CTkToplevel):
         # остановка с откатом уже записанных файлов, а не «тихое» убийство окна).
         self.cancel_btn = self._btn(self.footer, "Отмена", self._cancel, ghost=True)
         self._cancel_flag = False
+        self._bg_poll = None
 
         self.back_btn.pack(side="left")
 
@@ -174,23 +176,43 @@ class Wizard(ctk.CTkToplevel):
 
     # ------------------------------------------------------------------
     def run_bg(self, work, on_done, on_error):
-        """Выполнить работу в фоне, показать результат в главном потоке."""
+        """Выполнить ``work`` в фоне, вернуть результат в главный поток.
+
+        ТЗ (дефект 1.9: «правка Tk из фоновых потоков»): рабочий поток НЕ
+        вызывает никаких методов Tk — он только кладёт результат в очередь.
+        Главный поток забирает его через ``after``-опрос и тогда уже трогает
+        виджеты.
+        """
+        # Оставляем имя метода ``after`` как точку доставки в главный поток:
+        # очередь гарантирует, что Tk-вызовов из фона нет вообще.
+        events: queue.Queue = queue.Queue()
+
         def runner():
             try:
-                result = work()
+                events.put(("ok", work()))
             except Exception as e:  # noqa: BLE001
-                # ВАЖНО: ``e`` привязываем через default-аргумент, иначе Python
-                # удаляет имя при выходе из except и лямбда упадёт с NameError.
+                events.put(("err", e))
+
+        def poll():
+            try:
+                kind, payload = events.get_nowait()
+            except queue.Empty:
                 try:
-                    self.after(0, lambda err=e: on_error(err))
+                    self._bg_poll = self.after(30, poll)
                 except RuntimeError:
-                    pass
+                    pass  # окно закрыто — доставлять некому
                 return
             try:
-                self.after(0, lambda res=result: on_done(res))
-            except RuntimeError:
-                pass  # окно закрыто во время работы — показывать некому
+                if kind == "ok":
+                    on_done(payload)
+                else:
+                    on_error(payload)
+            finally:
+                self._bg_poll = None
+
+        self._bg_poll = None
         threading.Thread(target=runner, daemon=True).start()
+        self._bg_poll = self.after(30, poll)
 
     def busy(self, on: bool, text: str = "Работаем…"):
         self._busy = on

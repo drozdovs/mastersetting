@@ -20,6 +20,7 @@ GUI не содержит бизнес-логики: только рисует �
 from __future__ import annotations
 
 import os
+import queue
 import sys
 import threading
 from typing import Callable
@@ -94,19 +95,38 @@ class BaseWindow(ctk.CTkToplevel):
                   on_progress: Callable | None = None) -> None:
         """Выполнить ``work`` в потоке, вернуть результат в главный поток.
 
-        Виджеты из потока НЕ трогаем: используем ``self.after``.
+        ТЗ (дефект 1.9: «правка Tk из фоновых потоков»): рабочий поток НЕ
+        трогает Tk — он только кладёт результат в очередь, а главный поток
+        забирает его через ``after``-опрос.
         """
+        events: queue.Queue = queue.Queue()
+
         def runner():
             try:
-                result = work()
+                events.put(("ok", work()))
             except Exception as e:  # noqa: BLE001
-                # ``e`` через default-аргумент: иначе имя удаляется при выходе
-                # из except и лямбда падает с NameError вместо показа ошибки.
-                self.after(0, lambda err=e: on_error(err))
-                return
-            self.after(0, lambda res=result: on_done(res))
+                events.put(("err", e))
 
+        def poll():
+            try:
+                kind, payload = events.get_nowait()
+            except queue.Empty:
+                try:
+                    self._bg_poll = self.after(30, poll)
+                except RuntimeError:
+                    pass
+                return
+            try:
+                if kind == "ok":
+                    on_done(payload)
+                else:
+                    on_error(payload)
+            finally:
+                self._bg_poll = None
+
+        self._bg_poll = None
         threading.Thread(target=runner, daemon=True).start()
+        self._bg_poll = self.after(30, poll)
 
 
 # ===========================================================================

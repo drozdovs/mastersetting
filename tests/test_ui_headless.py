@@ -304,6 +304,41 @@ def test_wizard_async_success_reaches_handler(app, monkeypatch):
     win.destroy()
 
 
+def test_background_worker_never_touches_tk(app, monkeypatch):
+    """ТЗ (дефект 1.9): рабочий поток НЕ трогает Tk — результат приходит из
+    главного потока через очередь, а ``work`` выполняется в отдельном потоке."""
+    import threading
+
+    import agent.wizard as wiz
+
+    win = wiz.WriteWizard(app)
+    app.update()
+
+    main_ident = threading.get_ident()
+    box = {}
+
+    def work():
+        box["work_thread"] = threading.get_ident()
+        return 7
+
+    def on_done(r):
+        box["done_thread"] = threading.get_ident()
+        box["value"] = r
+
+    win.run_bg(work, on_done=on_done, on_error=lambda e: box.setdefault("err", e))
+    import time
+    for _ in range(100):
+        app.update()
+        if "value" in box or "err" in box:
+            break
+        time.sleep(0.02)
+
+    assert box.get("value") == 7, box
+    assert box["work_thread"] != main_ident, "work выполнился в главном потоке"
+    assert box["done_thread"] == main_ident, "обработчик выполнился не в главном потоке"
+    win.destroy()
+
+
 def test_operator_window_changes_operator(app):
     import agent.app as appmod
     win = appmod.OperatorWindow(app)
