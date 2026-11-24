@@ -339,6 +339,34 @@ def test_background_worker_never_touches_tk(app, monkeypatch):
     win.destroy()
 
 
+def test_library_actions_disabled_when_empty(app, tmp_path):
+    """ТЗ (дефект 1.9): кнопки пресета недоступны, когда выбирать нечего."""
+    import agent.app as appmod
+
+    class _EmptyCtrl:
+        def list_operators(self):
+            return []
+
+        def list_cameras(self):
+            return []
+
+        def list_presets(self, op, cam):
+            return []
+
+    win = appmod.LibraryWindow(app)
+    app.update()
+    # Пустая библиотека: выбирать нечего -> кнопки выключены.
+    win.query.delete(0, "end")
+    real_ctrl = win.ctrl
+    win.ctrl = _EmptyCtrl()
+    win._fill_triples()
+    app.update()
+    assert win.export_btn.cget("state") == "disabled"
+    assert win.delete_btn.cget("state") == "disabled"
+    win.ctrl = real_ctrl
+    win.destroy()
+
+
 def test_operator_window_changes_operator(app):
     import agent.app as appmod
     win = appmod.OperatorWindow(app)

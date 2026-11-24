@@ -577,10 +577,12 @@ class LibraryWindow(BaseWindow):
         action.pack(fill="x")
         self.triple = ctk.CTkComboBox(action, values=["—"], state="readonly")
         self.triple.pack(side="left", fill="x", expand=True)
-        self.button(action, "Выгрузить версию…", self._export, kind="ghost",
-                    width=160, height=30).pack(side="left", padx=(6, 0))
-        self.button(action, "Удалить пресет…", self._delete, kind="danger",
-                    width=150, height=30).pack(side="left", padx=(6, 0))
+        self.export_btn = self.button(action, "Выгрузить версию…", self._export,
+                                      kind="ghost", width=160, height=30)
+        self.export_btn.pack(side="left", padx=(6, 0))
+        self.delete_btn = self.button(action, "Удалить пресет…", self._delete,
+                                      kind="danger", width=150, height=30)
+        self.delete_btn.pack(side="left", padx=(6, 0))
         self._fill_triples()
 
     # ------------------------------------------------------------------
@@ -598,6 +600,11 @@ class LibraryWindow(BaseWindow):
                     labels.append(label)
         self.triple.configure(values=labels or ["—"])
         self.triple.set(labels[0] if labels else "—")
+        # ТЗ (дефект 1.9): в пустом состоянии кнопки должны быть недоступны,
+        # а не «жаловаться» после нажатия.
+        state = "normal" if labels else "disabled"
+        self.export_btn.configure(state=state)
+        self.delete_btn.configure(state=state)
 
     def _selected_triple(self):
         label = self.triple.get()
