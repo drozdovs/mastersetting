@@ -54,7 +54,14 @@ def legacy_base_path() -> str:
 
 
 def app_data_dir() -> Path:
-    """Папка данных приложения (для БД, логов, конфига)."""
+    """Папка данных приложения (для БД, логов, конфига).
+
+    Переопределяется переменной ``MS_APPDATA`` — это нужно тестам, чтобы они
+    не писали в реальный каталог пользователя.
+    """
+    override = os.environ.get("MS_APPDATA")
+    if override:
+        return Path(override)
     if IS_WINDOWS:
         root = os.environ.get("APPDATA") or str(Path.home())
         return Path(root) / "MasterSetting"

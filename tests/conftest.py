@@ -19,3 +19,10 @@ os.environ.setdefault(
     "MS_SECRETS_FILE",
     os.path.join(tempfile.mkdtemp(prefix="ms-secrets-"), "secrets.enc"),
 )
+
+# Каталог данных приложения — во временную папку, чтобы тесты НИКОГДА не писали
+# в реальный ~/.mastersetting / %APPDATA%\MasterSetting пользователя.
+os.environ.setdefault(
+    "MS_APPDATA",
+    tempfile.mkdtemp(prefix="ms-appdata-"),
+)
