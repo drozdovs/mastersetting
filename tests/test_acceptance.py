@@ -687,6 +687,98 @@ def test_set_data_path_rejects_system_root(tmp_path):
     assert res["ok"] is False
 
 
+def _make_signed_package(tmp_path, sign=True, tamper=False):
+    """Собрать (манифест, пакет, публичный ключ) с подписью Ed25519."""
+    import base64
+
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    from mastersetting import updates
+
+    sk = Ed25519PrivateKey.generate()
+    priv = base64.b64encode(sk.private_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PrivateFormat.Raw,
+        encryption_algorithm=serialization.NoEncryption())).decode()
+    pub = base64.b64encode(sk.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw)).decode()
+
+    pkg = tmp_path / "setup.bin"
+    pkg.write_bytes(b"installer-bytes")
+    from mastersetting.fs_ops import hash_file
+    m = updates.Manifest(version="9.9.9", platform=updates._this_platform(),
+                         filename="setup.bin", sha256=hash_file(str(pkg)))
+    if sign:
+        m = updates.sign_manifest(m, priv)
+    if tamper:  # подменяем содержимое пакета ПОСЛЕ подписи
+        pkg.write_bytes(b"installer-bytes-EVIL")
+    man_path = tmp_path / "manifest.json"
+    man_path.write_text(m.to_json(), encoding="utf-8")
+    return str(man_path), str(pkg), pub
+
+
+def test_prepare_update_rejects_bad_signature(tmp_path, monkeypatch):
+    """ТЗ: неверная подпись обновления отклоняется, установщик НЕ выкладывается."""
+    monkeypatch.setenv("MS_SECRETS_FILE", str(tmp_path / "secrets.enc"))
+    from mastersetting.config import Config
+    from agent.controllers import AppController
+
+    cfg = Config()
+    cfg.base_path = str(tmp_path / "base")
+    ctrl = AppController(cfg)
+
+    man, pkg, pub = _make_signed_package(tmp_path, sign=False)   # без подписи
+    ctrl._secrets().set("update_public_key", pub)
+    res = ctrl.prepare_update(man, pkg)
+    assert res["ok"] is False
+    assert "отклонён" in res["message"].lower() or "подпис" in res["message"].lower()
+    # в каталог обновлений ничего не попало
+    updates_dir = os.path.dirname(ctrl.config.base_path) + "/updates"
+    assert not os.path.isdir(updates_dir) or not os.listdir(updates_dir)
+    # попытка видна в журнале обновлений
+    assert any(e.get("ok") is False for e in ctrl.update_log())
+
+
+def test_prepare_update_rejects_tampered_hash(tmp_path, monkeypatch):
+    """ТЗ: подпись верна, но содержимое пакета подменено — отклоняем (хеш)."""
+    monkeypatch.setenv("MS_SECRETS_FILE", str(tmp_path / "secrets.enc"))
+    from mastersetting.config import Config
+    from agent.controllers import AppController
+
+    cfg = Config()
+    cfg.base_path = str(tmp_path / "base")
+    ctrl = AppController(cfg)
+
+    man, pkg, pub = _make_signed_package(tmp_path, sign=True, tamper=True)
+    ctrl._secrets().set("update_public_key", pub)
+    res = ctrl.prepare_update(man, pkg)
+    assert res["ok"] is False and ("хеш" in res["message"].lower()
+                                   or "отклонён" in res["message"].lower())
+
+
+def test_prepare_update_stages_verified_package_and_backs_up(tmp_path, monkeypatch):
+    """ТЗ: проверенный пакет выкладывается, данные получают страховочную копию,
+    авто-запуска нет (только ручной)."""
+    monkeypatch.setenv("MS_SECRETS_FILE", str(tmp_path / "secrets.enc"))
+    from mastersetting.config import Config
+    from agent.controllers import AppController
+
+    cfg = Config()
+    cfg.base_path = str(tmp_path / "base")
+    os.makedirs(cfg.base_path, exist_ok=True)
+    ctrl = AppController(cfg)
+
+    man, pkg, pub = _make_signed_package(tmp_path, sign=True)
+    ctrl._secrets().set("update_public_key", pub)
+    res = ctrl.prepare_update(man, pkg)
+    assert res["ok"] is True, res
+    assert os.path.isfile(res["path"]), "проверенный пакет не выложен"
+    assert res["backup"], "перед установкой не сделана страховочная копия"
+    assert "вручную" in res["message"], "нет напоминания о ручном запуске"
+
+
 # ===========================================================================
 # 14. Парная запись: технический шлюз и безопасность (ТЗ п.2)
 # ===========================================================================
