@@ -17,7 +17,6 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from .filters import is_excluded
-from .platform import get_directory_size
 
 # Сигнатуры колбэков
 ProgressCb = Callable[["Progress"], None]

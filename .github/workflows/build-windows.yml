@@ -2,9 +2,6 @@ name: Build Windows Agent
 
 # Собирает портативную сборку MasterSetting (onedir zip).
 # Запуск: вручную (workflow_dispatch) или на тег вида v2.0.0.
-#
-# Основной путь сборки — свой сервер (deploy/build_on_server.sh).
-# Этот workflow оставлен как резервный/для тегов.
 
 on:
   workflow_dispatch:
@@ -32,7 +29,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller
+          pip install -r requirements.txt pytest pyinstaller
+
+      - name: Run test suite on Windows (ТЗ п.5)
+        run: python -m pytest tests/ -q
 
       - name: Build with PyInstaller (onedir, no UPX, icon)
         run: python -m PyInstaller --clean --noconfirm deploy\MasterSetting.spec

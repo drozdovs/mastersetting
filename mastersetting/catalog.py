@@ -2,8 +2,7 @@
 """Локальный каталог (SQLite) — метаданные, история и статистика.
 
 Хранит записи об операторах, камерах, сохранённых архивах и журнал операций
-(save/load). Используется агентом офлайн и как источник данных для синхронизации
-с сервером.
+(save/load). Всё хранится локально и не зависит от сети.
 """
 
 from __future__ import annotations
@@ -53,8 +52,7 @@ CREATE TABLE IF NOT EXISTS events (
     message      TEXT DEFAULT '',
     bytes        INTEGER DEFAULT 0,
     files        INTEGER DEFAULT 0,
-    created_at   TEXT NOT NULL,
-    synced       INTEGER DEFAULT 0     -- отправлено ли на сервер
+    created_at   TEXT NOT NULL
 );
 """
 
@@ -172,29 +170,20 @@ class Catalog:
             cur = conn.execute(
                 """INSERT INTO events
                    (kind, operator, camera, settings, drive, status, message,
-                    bytes, files, created_at, synced)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+                    bytes, files, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (kind, operator, camera, settings, drive, status, message,
                  bytes_, files, _now()),
             )
             return int(cur.lastrowid)
 
-    def unsynced_events(self, limit: int = 200) -> list[dict]:
+    def list_events(self, limit: int = 200) -> list[dict]:
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT * FROM events WHERE synced = 0 ORDER BY id LIMIT ?",
+                "SELECT * FROM events ORDER BY id DESC LIMIT ?",
                 (limit,),
             ).fetchall()
         return [dict(r) for r in rows]
-
-    def mark_synced(self, event_ids: list[int]) -> None:
-        if not event_ids:
-            return
-        with self._lock, self._connect() as conn:
-            conn.executemany(
-                "UPDATE events SET synced = 1 WHERE id = ?",
-                [(i,) for i in event_ids],
-            )
 
     def stats(self) -> dict:
         """Агрегированная статистика для панели/дашборда."""

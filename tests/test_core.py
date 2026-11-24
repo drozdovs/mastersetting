@@ -1,21 +1,20 @@
 # -*- coding: utf-8 -*-
-"""Тесты ядра MasterSetting."""
+"""Тесты ядра MasterSetting.
 
-import json
+Тесты ниже работают только с новым ядром (версии + безопасное копирование).
+Устаревший движок, копировавший корень карты целиком, удалён по ТЗ.
+"""
+
 import os
 import sys
-import time
 
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from mastersetting.catalog import Catalog
-from mastersetting.config import Config
-from mastersetting.engine import ArchiveEngine, EngineError
-from mastersetting.filters import is_excluded, sanitize_name, validate_char
 from mastersetting import fs_ops
-from mastersetting.naming import parse_settings_folder, settings_dir, settings_folder_name
+from mastersetting.catalog import Catalog
+from mastersetting.filters import is_excluded, sanitize_name, validate_char
 
 EXC_FILES = {"LASTCLIP.TXT", "lastclip.txt"}
 EXC_EXT = {".mp4", ".mxf", ".mts", ".jpg"}
@@ -51,28 +50,6 @@ def test_is_excluded():
     assert is_excluded("shot.mxf", EXC_FILES, EXC_EXT)
     assert not is_excluded("settings.dat", EXC_FILES, EXC_EXT)
     assert not is_excluded("config.txt", EXC_FILES, EXC_EXT)
-
-
-# ---------------------------------------------------------------------------
-# Имена и пути
-# ---------------------------------------------------------------------------
-
-def test_settings_folder_name():
-    from datetime import datetime
-    name = settings_folder_name("Основные", datetime(2024, 5, 7))
-    assert name == "20240507_Основные"
-
-
-def test_parse_settings_folder():
-    assert parse_settings_folder("20240507_Основные") == ("20240507", "Основные")
-    assert parse_settings_folder("БезДаты") == (None, "БезДаты")
-
-
-def test_settings_dir(tmp_path):
-    p = settings_dir(str(tmp_path), "Иван", "SonyFX3", "Основные")
-    assert p.parent.name == "SonyFX3"
-    assert p.parent.parent.name == "Иван"
-    assert p.parent.parent.parent.name == "cameraman"
 
 
 # ---------------------------------------------------------------------------
@@ -174,70 +151,25 @@ def test_catalog_events_and_stats(tmp_path):
     assert st["loads_ok"] == 1
     assert st["errors"] == 1
 
-    unsynced = cat.unsynced_events()
-    assert len(unsynced) == 3
-    cat.mark_synced([e["id"] for e in unsynced])
-    assert cat.unsynced_events() == []
+    events = cat.list_events()
+    assert len(events) == 3
 
 
 # ---------------------------------------------------------------------------
-# Движок: полный цикл save -> load через локальные пути
+# Устаревший движок удалён: проверяем, что копирования корня карты нет
 # ---------------------------------------------------------------------------
 
-def _config(tmp_path):
-    cfg = Config()
-    cfg.base_path = str(tmp_path / "base")
-    os.makedirs(cfg.base_path, exist_ok=True)
-    return cfg
+def test_legacy_root_copy_engine_is_gone():
+    """ТЗ: приложение не должно копировать корень карты целиком.
 
-
-def test_engine_save_and_load_roundtrip(tmp_path):
-    cfg = _config(tmp_path)
-    cat = Catalog(db_path=str(tmp_path / "c.db"))
-    eng = ArchiveEngine(config=cfg, catalog=cat)
-
-    card = tmp_path / "card"
-    card.mkdir()
-    _make_card(str(card))
-
-    rep = eng.save("Иван", "SonyFX3", "Основные", from_path=str(card))
-    assert rep.ok, rep.message
-    assert rep.files == 2
-
-    # Файл настроек лежит в архиве
-    archives = cat.list_archives("Иван", "SonyFX3")
-    assert len(archives) == 1
-    assert os.path.exists(os.path.join(archives[0]["path"], "PRIVATE", "SONY", "SETTING1.DAT"))
-
-    # Загрузка на пустую «флешку»
-    card2 = tmp_path / "card2"
-    card2.mkdir()
-    rep2 = eng.load("Иван", "SonyFX3", "Основные", to_path=str(card2))
-    assert rep2.ok, rep2.message
-    assert os.path.exists(card2 / "PRIVATE" / "SONY" / "SETTING2.DAT")
-
-    st = cat.stats()
-    assert st["saves_ok"] == 1 and st["loads_ok"] == 1
-
-
-def test_engine_no_overwrite_without_flag(tmp_path):
-    cfg = _config(tmp_path)
-    cat = Catalog(db_path=str(tmp_path / "c.db"))
-    eng = ArchiveEngine(config=cfg, catalog=cat)
-    card = tmp_path / "card"
-    card.mkdir()
-    _make_card(str(card))
-
-    eng.save("Иван", "SonyFX3", "Основные", from_path=str(card))
-    with pytest.raises(EngineError):
-        eng.save("Иван", "SonyFX3", "Основные", from_path=str(card))
-    # С разрешением — ок
-    rep = eng.save("Иван", "SonyFX3", "Основные", from_path=str(card), overwrite=True)
-    assert rep.ok
-
-
-def test_engine_validates_input(tmp_path):
-    cfg = _config(tmp_path)
-    eng = ArchiveEngine(config=cfg, catalog=Catalog(db_path=str(tmp_path / "c.db")))
-    with pytest.raises(EngineError):
-        eng.save("", "SonyFX3", "Основные", from_path=str(tmp_path))
+    Раньше это делал ``mastersetting/engine.py``. Он удалён, и в ядре не
+    должно остаться модуля, который копирует дерево с карты по расширениям.
+    """
+    import mastersetting
+    here = os.path.dirname(os.path.abspath(mastersetting.__file__))
+    assert not os.path.exists(os.path.join(here, "engine.py"))
+    assert not os.path.exists(os.path.join(here, "naming.py"))
+    # пакет импортируется и без них
+    from mastersetting.library import PresetLibrary
+    from mastersetting.settings_rules import discover_in_folder
+    assert PresetLibrary is not None and discover_in_folder is not None

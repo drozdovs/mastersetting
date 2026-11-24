@@ -24,14 +24,33 @@ IS_LINUX = sys.platform.startswith("linux")
 
 
 def default_base_path() -> str:
-    """Базовая папка с настройками.
+    """Базовая папка с настройками (настраиваемая, вне каталога установки).
 
-    Windows — как раньше ``C:/setting``.
-    macOS/Linux — ``~/MasterSetting``.
+    ТЗ требует НЕ жёстко задавать ``C:/setting`` (дефект 1.9) и не хранить
+    рабочую базу внутри каталога установки, который перезаписывается при
+    обновлении. Поэтому по умолчанию архив живёт в каталоге данных приложения:
+
+    * Windows — ``%LOCALAPPDATA%\\MasterSetting\\setting``;
+    * macOS/Linux — ``~/MasterSetting/setting``.
+
+    Старый ``C:/setting`` (1.9) при первом запуске показывается как «предлагается
+    перенести» — но только после проверяемой копии и с согласия оператора.
     """
     if IS_WINDOWS:
+        root = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+        base = Path(root) if root else Path.home()
+        return str(base / "MasterSetting" / "setting")
+    return str(Path.home() / "MasterSetting" / "setting")
+
+
+def legacy_base_path() -> str:
+    """Путь архива из версии 1.9 (для миграции). Настраивается через MS_LEGACY_BASE."""
+    env = os.environ.get("MS_LEGACY_BASE")
+    if env:
+        return env
+    if IS_WINDOWS:
         return "C:/setting"
-    return str(Path.home() / "MasterSetting")
+    return str(Path.home() / "MasterSetting" / "setting" / "_legacy")
 
 
 def app_data_dir() -> Path:
@@ -40,6 +59,22 @@ def app_data_dir() -> Path:
         root = os.environ.get("APPDATA") or str(Path.home())
         return Path(root) / "MasterSetting"
     return Path.home() / ".mastersetting"
+
+
+def ensure_app_data_dir() -> Path:
+    """Создать каталог данных и ограничить права владельцем (0700).
+
+    Здесь лежат журнал, секреты (файловый фолбэк), конфиг и каталог библиотеки —
+    поэтому каталог не должен быть доступен другим пользователям машины (ТЗ).
+    """
+    d = app_data_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    if not IS_WINDOWS:
+        try:
+            os.chmod(d, 0o700)
+        except OSError:
+            pass
+    return d
 
 
 # Расширения, которые НЕ копируются (медиафайлы с карты)
@@ -83,13 +118,8 @@ class Config:
     auto_detect_drive: bool = True
     auto_detect_poll_seconds: float = 1.5
 
-    # Сервер (заполняется позже; пусто = offline-режим)
-    server_url: str = ""
-    server_token: str = ""
-    heartbeat_seconds: float = 30.0
-
-    # Автообновление
-    auto_update: bool = True
+    # Версия приложения (для проверки подписанных обновлений)
+    app_version: str = "2.0.0"
 
     # ------------------------------------------------------------------
     # Производные пути
@@ -127,7 +157,7 @@ class Config:
 
     @classmethod
     def load(cls) -> "Config":
-        """Загрузить конфиг из файла и переменных окружения."""
+        """Прочитать конфиг из файла и переменных окружения."""
         cfg = cls()
         path = cls.config_file()
         if path.exists():
@@ -142,15 +172,21 @@ class Config:
             except Exception:
                 pass
 
-        # Переменные окружения имеют приоритет (удобно для сервера)
+        # Переменные окружения имеют приоритет
         env_map = {
             "MS_BASE_PATH": "base_path",
-            "MS_SERVER_URL": "server_url",
-            "MS_SERVER_TOKEN": "server_token",
         }
         for env_var, attr in env_map.items():
             if os.environ.get(env_var):
                 setattr(cfg, attr, os.environ[env_var])
+
+        # ТЗ: не держать рабочую базу в каталоге установки, который обновляется.
+        from .platform import is_install_path
+        try:
+            if is_install_path(cfg.base_path):
+                cfg.base_path = default_base_path()
+        except Exception:
+            pass
         return cfg
 
     def save(self) -> None:

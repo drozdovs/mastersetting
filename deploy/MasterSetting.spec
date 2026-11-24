@@ -41,7 +41,7 @@ datas += [
 ]
 hiddenimports = (
     collect_submodules("customtkinter")
-    + ["PIL", "requests", "sqlite3", "tkinter", "tkinter.filedialog"]
+    + ["PIL", "sqlite3", "tkinter", "tkinter.filedialog"]
 )
 
 a = Analysis(
@@ -52,7 +52,7 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     runtime_hooks=[],
-    excludes=["pytest", "matplotlib", "numpy", "fastapi", "uvicorn", "sqlalchemy"],
+    excludes=["pytest", "matplotlib", "numpy"],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,

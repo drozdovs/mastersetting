@@ -102,6 +102,41 @@ def main() -> None:
     base.save(png, format="PNG")
     print(f"icon.png создан: {png}")
 
+    # macOS: .icns с retina-размерами (512/1024 обязательны для Retina)
+    try:
+        make_icns()
+    except Exception as e:  # noqa: BLE001
+        print(f"icon.icns не создан ({e}) — для macOS это необязательно")
+
+
+def make_icns(out_path: str | None = None) -> str:
+    """Собрать icon.icns для macOS через временный .iconset и iconutil."""
+    import shutil
+    import subprocess
+    import tempfile
+
+    out_path = out_path or os.path.join(HERE, "icon.icns")
+    with tempfile.TemporaryDirectory() as tmp:
+        iconset = os.path.join(tmp, "icon.iconset")
+        os.makedirs(iconset, exist_ok=True)
+        # Пары (пиксельный размер, имя файла в iconset)
+        specs = [
+            (16, "icon_16x16.png"), (32, "icon_16x16@2x.png"),
+            (32, "icon_32x32.png"), (64, "icon_32x32@2x.png"),
+            (128, "icon_128x128.png"), (256, "icon_128x128@2x.png"),
+            (256, "icon_256x256.png"), (512, "icon_256x256@2x.png"),
+            (512, "icon_512x512.png"), (1024, "icon_512x512@2x.png"),
+        ]
+        for px, name in specs:
+            draw_icon(px).save(os.path.join(iconset, name), format="PNG")
+
+        if shutil.which("iconutil") is None:
+            raise RuntimeError("iconutil недоступен (не macOS)")
+        subprocess.run(["iconutil", "-c", "icns", iconset, "-o", out_path],
+                       check=True)
+    print(f"icon.icns создан: {out_path}")
+    return out_path
+
 
 if __name__ == "__main__":
     main()

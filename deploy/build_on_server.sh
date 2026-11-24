@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# Сборка MasterSetting.exe + установщика на своём сервере.
+# Сборка портативной версии MasterSetting (Windows .exe) на своём сервере.
 # Linux + Wine. Без Windows-машины и без GitHub Actions.
 #
 # Проверено на Ubuntu 24.04 / Wine 9.0 / Python 3.12 (python-build-standalone).

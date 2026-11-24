@@ -23,5 +23,5 @@ echo.
 echo Дальнейшие шаги для антивирусов:
 echo   - Подписать код: signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /f cert.pfx dist\MasterSetting\MasterSetting.exe
 echo   - Отправить в Microsoft: https://www.microsoft.com/wdsi/filesubmission
-echo   - Упаковать в установщик Inno Setup (см. deploy\installer.iss)
+echo   - Упаковать папку dist\MasterSetting в zip (портативная сборка)
 pause

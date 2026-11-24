@@ -1,0 +1,25 @@
+# Образ для прогона автотестов MasterSetting под Windows-Python через Wine.
+# Отдельный от сборочного образа: не собирает .exe, только гоняет tests/.
+#
+# Сборка:  docker build -t ms-winetest -f deploy/Dockerfile.wine-test .
+# Запуск:  docker run --rm -v "$PWD":/src ms-winetest
+# Отчёт:   deploy/windows-report/test-result.txt
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    WINEDEBUG=-all \
+    WINEPREFIX=/root/.wine \
+    WINEARCH=win64
+
+RUN dpkg --add-architecture i386 \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        wine64 wine32:i386 winbind cabextract xvfb wget unzip \
+        python3 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+COPY deploy/verify_in_wine.sh /usr/local/bin/verify_in_wine.sh
+RUN chmod +x /usr/local/bin/verify_in_wine.sh
+
+ENTRYPOINT ["/usr/local/bin/verify_in_wine.sh"]

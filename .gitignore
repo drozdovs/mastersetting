@@ -19,16 +19,19 @@ env/
 *.log
 .ms_cache/
 
-# === Secrets / server ===
+# === Secrets ===
 .env
 *.pem
 *.key
 secrets/
+# Секреты и рантайм-состояние приложения (на случай запуска из папки проекта)
+secrets.enc
+config.json
+local_data.json
+fx3_paths_confirmed.json
 
-# === Web ===
-node_modules/
-web/dist/
-web/.vite/
+# === Артефакты сборки ===
+MasterSetting-windows-*.zip
 
 # === OS ===
 .DS_Store
