@@ -17,6 +17,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 ctk = pytest.importorskip("customtkinter")
 
 
+class _FakePlan:
+    """Минимальный план сохранения для UI-теста (без чтения карты)."""
+
+    file_count = 1
+
+    def __init__(self):
+        self.files = {"PRIVATE/SONY/SETTING/X/X.DAT": "/tmp/x.dat"}
+        self.detected_model = ""
+        self.warnings = ["Для этой модели нет проверенного правила — "
+                         "формат не подтверждён."]
+
+
 @pytest.fixture(scope="module")
 def app():
     base = os.path.join(tempfile.mkdtemp(), "base")
@@ -197,6 +209,24 @@ def test_save_wizard_requires_operator(app, monkeypatch):
     win.next()
     app.update()
     assert seen.get("called") is True, "мастер пустил дальше без оператора"
+    win.destroy()
+
+
+def test_save_wizard_shows_unconfirmed_format_warning(app, monkeypatch):
+    """ТЗ: импорт из папки без проверенного правила НЕ выглядит как
+    «проверенный формат камеры» — оператор видит предупреждение."""
+    import agent.wizard as wiz
+    win = wiz.SaveWizard(app)
+    app.update()
+    win.card = "/Volumes/FAKE"
+    win.go_to(2)
+    app.update()
+    # plan_from_media для неизвестной модели даёт warnings с явным текстом
+    monkeypatch.setattr(win.ctrl, "plan_save", lambda *a, **k: _FakePlan())
+    win._load_plan()
+    app.update()
+    text = win.warn_label.cget("text")
+    assert "не подтверждён" in text
     win.destroy()
 
 

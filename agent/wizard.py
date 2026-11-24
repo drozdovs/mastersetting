@@ -379,6 +379,11 @@ class SaveWizard(Wizard):
         self.found_label = self.label(b, "Смотрю, что есть на карте…",
                                       size="small", color=theme.MUTED)
         self.found_label.pack(anchor="w", padx=18, pady=(0, 8))
+        # ТЗ: «не называй такой импорт проверенным форматом камеры» —
+        # если для модели нет подтверждённого правила, честно предупреждаем.
+        self.warn_label = self.label(b, "", size="tiny", color=theme.WARN,
+                                     wrap=520)
+        self.warn_label.pack(anchor="w", padx=18, pady=(0, 8))
 
         self.files_box = ctk.CTkTextbox(b, height=120, fg_color=theme.PANEL2,
                                         text_color=theme.TEXT, border_width=0,
@@ -392,6 +397,7 @@ class SaveWizard(Wizard):
         except Exception as e:  # noqa: BLE001
             self.found_label.configure(text=f"Не удалось посмотреть карту: {e}",
                                        text_color=theme.DANGER)
+            self.warn_label.configure(text="")
             return
         n = self.plan.file_count
         if n == 0:
@@ -403,6 +409,8 @@ class SaveWizard(Wizard):
             extra = f"  ·  модель в файле: {model}" if model else ""
             self.found_label.configure(
                 text=f"Найдено {n} файл(ов) настроек.{extra}", text_color=theme.OK)
+        warnings = list(getattr(self.plan, "warnings", []) or [])
+        self.warn_label.configure(text="\n".join(warnings) if warnings else "")
         self.files_box.configure(state="normal")
         self.files_box.delete("1.0", "end")
         self.files_box.insert("1.0", "\n".join(self.plan.files.keys())
