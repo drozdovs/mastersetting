@@ -39,6 +39,12 @@ datas += [
     (os.path.join(_HERE, "icon.ico"), "deploy"),
     (os.path.join(_HERE, "icon.png"), "deploy"),
 ]
+# Офлайн-справка: кнопка «Помощь» ищет docs/help/index.html внутри сборки.
+# Без этого на Windows справка не откроется (в macOS-спеке она уже включена).
+_HELP = os.path.join(_ROOT, "docs", "help")
+if os.path.isdir(_HELP):
+    for _name in os.listdir(_HELP):
+        datas.append((os.path.join(_HELP, _name), "docs/help"))
 hiddenimports = (
     collect_submodules("customtkinter")
     + collect_submodules("cryptography")
