@@ -398,7 +398,21 @@ class MasterSettingApp(ctk.CTk):
                 self.after_cancel(self._drive_poll)
             except Exception:
                 pass
-        self.destroy()
+        # CustomTkinter держит таймер масштабирования DPI, который может
+        # сработать уже после destroy() и выбросить TclError в консоль.
+        # Он не влияет на закрытие, но лучше заглушить его для чистого выхода.
+        try:
+            from customtkinter.windows.widgets.scaling.scaling_tracker import (
+                ScalingTracker,
+            )
+            ScalingTracker()._check_dpi_scaling = lambda *a, **k: None
+        except Exception:
+            pass
+        try:
+            if self.winfo_exists():
+                self.destroy()
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     def open_save_window(self):
