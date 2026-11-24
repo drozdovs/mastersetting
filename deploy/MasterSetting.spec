@@ -41,6 +41,7 @@ datas += [
 ]
 hiddenimports = (
     collect_submodules("customtkinter")
+    + collect_submodules("cryptography")
     + ["PIL", "sqlite3", "tkinter", "tkinter.filedialog"]
 )
 

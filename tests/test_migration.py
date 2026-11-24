@@ -32,7 +32,7 @@ def _old_archive(tmp_path):
     # Папка без настроек — не считаем пресетом
     p2 = old / "cameraman" / "Иван" / "SonyFX3" / "20260102_Пустая"
     p2.mkdir(parents=True)
-    (p2 / "readme.txt").write_text("нет настроек")
+    (p2 / "readme.txt").write_text("нет настроек", encoding="utf-8")
 
     # Папка _OLD — обрабатывается отдельно
     p3 = old / "cameraman" / "Иван" / "SonyFX3" / "20251231_Старое_OLD"
@@ -41,7 +41,8 @@ def _old_archive(tmp_path):
 
     # camera.txt
     (old / "main").mkdir(parents=True)
-    (old / "main" / "camera.txt").write_text("SonyFX3\nPanasonic270\n")
+    (old / "main" / "camera.txt").write_text("SonyFX3\nPanasonic270\n",
+                                             encoding="utf-8")
     return old
 
 
