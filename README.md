@@ -20,7 +20,7 @@
 
 | Платформа | Собрано | Запущено и проверено |
 |---|---|---|
-| **macOS** | ✅ `.app` + `.dmg` | ✅ **да** — приложение запускается, тесты проходят (237) |
+| **macOS** | ✅ `.app` + `.dmg` | ✅ **да** — приложение запускается, тесты проходят (238) |
 | **Windows 10/11** | ✅ `.exe` (pyinstaller, onedir) | ✅ **автотесты — да** (CI, windows-latest: 211 прошло, 13 пропущено); ⚠️ **живой запуск GUI на реальной машине оператора ещё не выполнялся** |
 
 Тесты на Windows прогоняются в CI (`.github/workflows/build-windows.yml`,
@@ -67,7 +67,7 @@ mastersetting/      # чистое ядро
   updates.py        # подписанный манифест обновлений
   catalog.py        # SQLite: журнал событий и статистика
 agent/              # GUI: app.py, wizard.py, dialogs.py, controllers.py, theme.py
-tests/              # pytest — 237 тестов
+tests/              # pytest — 238 тестов
 cli.py              # headless-CLI (только безопасные команды)
 main.py             # точка входа GUI
 deploy/             # PyInstaller spec, сборка .exe/.app, иконки
@@ -116,7 +116,7 @@ python cli.py cards       # список подключённых карт
 
 ```bash
 pip install pytest
-pytest tests/ -q          # 237 тестов
+pytest tests/ -q          # 238 тестов
 ```
 
 ---
